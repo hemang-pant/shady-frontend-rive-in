@@ -12,6 +12,7 @@ import {
   Spinner,
   Text,
 } from "@chakra-ui/react";
+import { StoreMetadata } from "../utils/IPFS/StoreMetadata";
 import { useState } from "react";
 import { MdError } from "react-icons/md";
 import { Link } from "react-router-dom";
@@ -31,9 +32,12 @@ import WalletButton from "../components/ConnectWallet";
 import ConnectWallet from "../components/ConnectWallet";
 import { uploadTrack } from "../graphql/mutation/uploadTrack";
 import { getArtistsByName } from "../graphql/query/getArtistsByName";
+import { MintNFT2 } from "../utils/MintNFT/MintNFT2";
+import { MintNFT3 } from "../utils/MintNFT/MintNFT3";
 // import { searchBarAutoComplete } from "";
 
 const UploadPage = () => {
+  const [txURL, setTxURL] = useState("");
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [songName, setSongName] = useState([]);
@@ -44,6 +48,8 @@ const UploadPage = () => {
   const [bannerUrl, setBannerUrl] = useState([]);
   const [artist, setArtist] = useState([]);
   const [audioDuration, setAudioDuration] = useState(0);
+  const [musicCID, setMusicCID] = useState("");
+  const [metadata, setMetadata] = useState("");
   // search query test
   const [temp, setTemp] = useState([]);
 
@@ -63,15 +69,16 @@ const UploadPage = () => {
   const uploadAudio = async () => {
     try {
       const cid = await StoreContent(audio);
-      /* const audioCID = `https://w3s.link/ipfs/${cid}/`;
-		console.log(audioCID); */
+      const audioCID = `https://w3s.link/ipfs/${cid}/`;
+		console.log(audioCID);
       console.log("track name: ", audio.name);
-      /* notify("Music file uploaded to IPFS"); */
-      /* setMusicCID(audioCID);
-		await uploadMetadata(banner, name, audioCID, description).then(
+      notify("Music file uploaded to IPFS");
+      setMusicCID(audioCID);
+		await uploadMetadata(banner, audio.name, audioCID, audio.name).then(
 			() => {
-			uploadToFireStore();
-		}); */
+        console.log("metadata uploaded");
+			//uploadToFireStore();
+		});
       return cid;
     } catch (err) {
       console.log(err);
@@ -95,6 +102,37 @@ const UploadPage = () => {
     } catch (err) {
       console.log(err);
       /* notify(err); */
+    }
+  };
+  const uploadMetadata = async (Banner, Name, MusicCID, Description) => {
+    try {
+      console.log("metadata: "+ "Banner, Name, MusicCID, Description")
+      const metadata = await StoreMetadata(Banner, Name, MusicCID, Description);
+      const uri = metadata.url;
+      setMetadata(uri);
+      notify("NFT metadata uploaded to IPFS");
+      await mintNFT(uri, "0x990190c4691f45b14205cA451104522D6B1B698a");
+    } catch (err) {
+      console.log(err);
+    }
+  };
+
+
+  /// mints the NFT by calling the function
+  const mintNFT = async (metadataURI, userAddress) => {
+    try {
+      // await connect();
+      const response = await MintNFT3(metadataURI, userAddress);
+      console.log("NFT minted with transaction : ", response.transaction_hash);
+      console.log(
+        "Track the transaction here : ",
+        response.transaction_external_url
+      );
+      // await console.log("Track Your Transaction here : ")
+      setTxURL(response.transaction_external_url);
+      notify("NFT minted ");
+    } catch (err) {
+      console.log(err);
     }
   };
 
