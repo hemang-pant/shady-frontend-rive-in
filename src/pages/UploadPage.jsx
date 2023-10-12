@@ -12,8 +12,7 @@ import {
   Spinner,
   Text,
 } from "@chakra-ui/react";
-import { StoreMetadata } from "../utils/IPFS/StoreMetadata";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { MdError } from "react-icons/md";
 import { Link } from "react-router-dom";
 import { resetPlayer } from "../redux/slices/playerSlice";
@@ -32,12 +31,10 @@ import WalletButton from "../components/ConnectWallet";
 import ConnectWallet from "../components/ConnectWallet";
 import { uploadTrack } from "../graphql/mutation/uploadTrack";
 import { getArtistsByName } from "../graphql/query/getArtistsByName";
-import { MintNFT2 } from "../utils/MintNFT/MintNFT2";
-import { MintNFT3 } from "../utils/MintNFT/MintNFT3";
+import { addArtist } from "../graphql/mutation/addArtist";
 // import { searchBarAutoComplete } from "";
 
 const UploadPage = () => {
-  const [txURL, setTxURL] = useState("");
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [songName, setSongName] = useState([]);
@@ -48,10 +45,9 @@ const UploadPage = () => {
   const [bannerUrl, setBannerUrl] = useState([]);
   const [artist, setArtist] = useState([]);
   const [audioDuration, setAudioDuration] = useState(0);
-  const [musicCID, setMusicCID] = useState("");
-  const [metadata, setMetadata] = useState("");
   // search query test
   const [temp, setTemp] = useState([]);
+  const [artistNotFound, setArtistNotFound] = useState(false);
 
   /* const validateFields = () => {
 		if (audio == "" || songName == "" || artistName == "" || banner == "") {
@@ -69,22 +65,47 @@ const UploadPage = () => {
   const uploadAudio = async () => {
     try {
       const cid = await StoreContent(audio);
-      const audioCID = `https://w3s.link/ipfs/${cid}/`;
-		console.log(audioCID);
-      console.log("track name: ", audio.name);
-      notify("Music file uploaded to IPFS");
-      setMusicCID(audioCID);
-		await uploadMetadata(banner, audio.name, audioCID, audio.name).then(
+      /* const audioCID = `https://w3s.link/ipfs/${cid}/`;
+		console.log(audioCID); */
+      /* notify("Music file uploaded to IPFS"); */
+      /* setMusicCID(audioCID);
+		await uploadMetadata(banner, name, audioCID, description).then(
 			() => {
-        console.log("metadata uploaded");
-			//uploadToFireStore();
-		});
+			uploadToFireStore();
+		}); */
       return cid;
     } catch (err) {
       console.log(err);
       /* notify(err); */
     }
   };
+
+  useEffect(() => {
+    const delayDebounceFn = setTimeout(() => {
+      console.log("delay function running")
+      handleQuery(artistName)
+      handleQuery();
+    }, 400)
+
+    return () => clearTimeout(delayDebounceFn)
+  }, [artistName])
+
+  const handleQuery = async (query) => {
+    try {
+      getArtistsByName(query).then((data) => {
+        if(data == null || data == undefined || data == ""){
+          setArtistNotFound(true);
+        }
+        else{
+          setArtist(data);
+          setArtistNotFound(false);
+        }
+      });
+    }
+    catch(err) {
+      console.log(err);
+    }
+  }
 
   const uploadBanner = async () => {
     try {
@@ -99,40 +120,10 @@ const UploadPage = () => {
 			uploadToFireStore();
 		}); */
       setBannerUrl(cid);
+      return cid;
     } catch (err) {
       console.log(err);
       /* notify(err); */
-    }
-  };
-  const uploadMetadata = async (Banner, Name, MusicCID, Description) => {
-    try {
-      console.log("metadata: "+ "Banner, Name, MusicCID, Description")
-      const metadata = await StoreMetadata(Banner, Name, MusicCID, Description);
-      const uri = metadata.url;
-      setMetadata(uri);
-      notify("NFT metadata uploaded to IPFS");
-      await mintNFT(uri, "0x990190c4691f45b14205cA451104522D6B1B698a");
-    } catch (err) {
-      console.log(err);
-    }
-  };
-
-
-  /// mints the NFT by calling the function
-  const mintNFT = async (metadataURI, userAddress) => {
-    try {
-      // await connect();
-      const response = await MintNFT3(metadataURI, userAddress);
-      console.log("NFT minted with transaction : ", response.transaction_hash);
-      console.log(
-        "Track the transaction here : ",
-        response.transaction_external_url
-      );
-      // await console.log("Track Your Transaction here : ")
-      setTxURL(response.transaction_external_url);
-      notify("NFT minted ");
-    } catch (err) {
-      console.log(err);
     }
   };
 
@@ -171,7 +162,6 @@ const UploadPage = () => {
   const handleSubmit = async () => {
     try {
       setLoading(true);
-      console.log("duration: ", audioDuration);
       if (
         artist["_id"] != "" &&
         audioDuration != "" &&
@@ -179,23 +169,41 @@ const UploadPage = () => {
         artistName != ""
       ) {
         await uploadAudio().then(async (cid) => {
-          console.log("entered then block");
           await uploadBanner().then((banner) => {
-            uploadTrack(
-              cid,
-              artist["_id"],
-              audioDuration,
-              "pop",
-              songName,
-              bannerUrl
-            );
+            if(artistNotFound){
+              //
+              addArtist(
+                "temp description",
+                "temp genre",
+                artistName,
+                banner,
+              ).then((res) => {
+                uploadTrack(
+                  cid,
+                  res["addArtist"]["_id"],
+                  audioDuration,
+                  "pop",
+                  songName,
+                  banner
+                ).then((res) => {
+                });
+              });
+            }
+            else{
+              uploadTrack(
+                cid,
+                artist["_id"],
+                audioDuration,
+                "pop",
+                songName,
+                banner
+              );
+            }
           });
         });
       } else {
-        console.log(temp);
         searchBarAutoComplete("front").then((res) => {
           temp.push(res);
-          console.log("search result: ", temp);
         });
       }
       // await setTimeout(uploadMetadata(), 5000);
@@ -241,11 +249,6 @@ const UploadPage = () => {
                 value={artistName}
                 onChange={(e) => {
                   setArtistName(e.target.value);
-                  console.log("artist name: ", artistName);
-                  getArtistsByName(e.target.value).then((data) => {
-                    setArtist(data);
-                    console.log("artist: ", artist);
-                  });
                 }}
                 placeholder="Enter the Artist and Feature Name"
               />
